@@ -29,13 +29,13 @@ async def play(ctx, url: str):
     voice = discord.utils.get(client.voice_clients, guild=ctx.guild)
     if not voice or not voice.is_connected():
         await voice_channel.connect()
-    
+
     ydl_opts = {
-    'format': 'bestaudio/best',
-    'postprocessors': [{
-        'key': 'FFmpegExtractAudio',
-        'preferredcodec': 'mp3',
-        'preferredquality': '192',
+        'format': 'bestaudio/best',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
         }],
     }
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
