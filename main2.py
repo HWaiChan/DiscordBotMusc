@@ -10,7 +10,7 @@ Python 3.5+
 pip install -U discord.py pynacl youtube-dl
 You also need FFmpeg in your PATH environment variable or the FFmpeg.exe binary in your bot's directory on Windows.
 """
-
+# Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
 import asyncio
 import functools
 import itertools
@@ -25,8 +25,17 @@ from dotenv import load_dotenv
 
 from discord.ext import commands
 
+import google.auth
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
+
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
+GOOGLE_TOKEN = os.getenv('GOOGLE_TOKEN')
 
 # Silence useless bug reports messages
 youtube_dl.utils.bug_reports_message = lambda: ''
@@ -78,7 +87,8 @@ class YTDLSource(discord.PCMVolumeTransformer):
         self.title = data.get('title')
         self.thumbnail = data.get('thumbnail')
         self.description = data.get('description')
-        self.duration = self.parse_duration(int(data.get('duration')))
+        self.duration = self.parse_duration(
+            int(data.get('duration'))) if data.get('duration') else None
         self.tags = data.get('tags')
         self.url = data.get('webpage_url')
         self.views = data.get('view_count')
@@ -113,7 +123,6 @@ class YTDLSource(discord.PCMVolumeTransformer):
             if process_info is None:
                 raise YTDLError(
                     'Couldn\'t find anything that matches `{}`'.format(search))
-
         webpage_url = process_info['webpage_url']
         partial = functools.partial(
             cls.ytdl.extract_info, webpage_url, download=False)
@@ -283,6 +292,7 @@ class Music(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.voice_states = {}
+        self.sheet_current_index = 0
 
     def get_voice_state(self, ctx: commands.Context):
         state = self.voice_states.get(ctx.guild.id)
@@ -487,6 +497,41 @@ class Music(commands.Cog):
 
                 await ctx.voice_state.songs.put(song)
                 await ctx.send('Enqueued {}'.format(str(source)))
+
+    @commands.command(name='playsheets')
+    async def _playsheets(self, ctx: commands.Context, *, spreadsheet_id: str):
+        """
+            Pulls URLS from a Google Sheet and populates the queue
+        """
+        QUEUE_SIZE = 10
+        service = build('sheets', 'v4', developerKey=GOOGLE_TOKEN)
+        range_ = 'Sheet1!A2:A'
+
+        request = service.spreadsheets().values().get(
+            spreadsheetId=spreadsheet_id, range=range_)
+        response = request.execute()
+
+        if not ctx.voice_state.voice:
+            await ctx.invoke(self._join)
+
+        async with ctx.typing():
+            for _, url in enumerate(response['values']):
+                print(url[0])
+
+                if "spotify" in url[0]:
+                    continue
+                try:
+                    source = await YTDLSource.create_source(ctx, url[0], loop=self.bot.loop)
+                    print("URL: " + url[0] + ",source: " + str(source))
+                except YTDLError as e:
+                    await ctx.send('An error occurred while processing this request: {}'.format(str(e)))
+                except Exception as e:
+                    print(e)
+                    continue
+                else:
+                    song = Song(source)
+                    await ctx.voice_state.songs.put(song)
+            self.sheet_current_index += QUEUE_SIZE
 
     @_join.before_invoke
     @_play.before_invoke
