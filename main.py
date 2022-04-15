@@ -580,8 +580,6 @@ class Music(commands.Cog):
                     for user_id in ctx.voice_client.channel.voice_states.keys():
                         member = await ctx.bot.fetch_user(user_id)
                         members.append(member.name)
-
-                    await ctx.send('People in channel {}'.format(str(members)))
                     flattened = list(itertools.chain(
                         *itemgetter(*members)(tedickmp)))
                     print("I type")
