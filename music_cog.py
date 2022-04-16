@@ -553,7 +553,7 @@ class Music(commands.Cog):
         tedickmp = defaultdict(list)
         for raw_song in urls:
             tedickmp[raw_song[1].strip()].append(raw_song[0])
-
+        
         if not ctx.voice_state.voice:
             await ctx.invoke(self._join)
 
